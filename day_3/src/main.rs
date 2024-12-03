@@ -3,11 +3,9 @@ use std::fs;
 fn main() {
     let puzzle: Vec<u8> = fs::read("./puzzle.txt").unwrap();
 
-    let mut state = State::new(puzzle);
+    let total = State::parse(puzzle);
 
-    state.looking_for_next_m();
-
-    println!("{}", state.total);
+    println!("{}", total);
 }
 
 const CHAR_M: u8 = 'm' as u8;
@@ -27,13 +25,17 @@ struct State {
 }
 
 impl State {
-    fn new(data: Vec<u8>) -> Self {
-        Self {
+    pub fn parse(data: Vec<u8>) -> usize {
+        let mut state = Self {
             data,
             idx: 0,
             total: 0,
             enabled: true,
-        }
+        };
+
+        state.look_for_next_m();
+
+        state.total
     }
     fn current(&self) -> Option<u8> {
         if self.idx >= self.data.len() {
@@ -48,7 +50,7 @@ impl State {
         }
         None
     }
-    fn looking_for_next_m(&mut self) {
+    fn look_for_next_m(&mut self) {
         loop {
             let c = match self.current() {
                 Some(c) => c,
@@ -122,13 +124,11 @@ impl State {
             self.next();
         }
 
-        // let number = number_chars.to_owned();
         let numbers = String::from_utf8(number_chars).ok()?;
 
         numbers.parse::<usize>().ok()
     }
     fn parse_do_dont(&mut self) -> Option<bool> {
-        // parse "do"
         self.parse_text("do")?;
 
         let enabled = match self.current()? {
