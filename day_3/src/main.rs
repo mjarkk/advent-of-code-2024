@@ -113,9 +113,9 @@ impl State {
             if c < CHAR_0 || c > CHAR_9 {
                 if idx == 0 {
                     return None;
-                } else {
-                    break;
                 }
+
+                break;
             }
 
             number_chars.push(c);
@@ -123,15 +123,9 @@ impl State {
         }
 
         // let number = number_chars.to_owned();
-        let numbers = match String::from_utf8(number_chars) {
-            Ok(v) => v,
-            Err(_) => return None,
-        };
+        let numbers = String::from_utf8(number_chars).ok()?;
 
-        return match numbers.parse::<usize>() {
-            Ok(v) => Some(v),
-            Err(_) => None,
-        };
+        numbers.parse::<usize>().ok()
     }
     fn parse_do_dont(&mut self) -> Option<bool> {
         // parse "do"
