@@ -8,19 +8,20 @@ fn main() {
         lines.push(line.chars().collect());
     }
 
+    let looking_for: Vec<char> = "XMAS".chars().collect();
+    let mut looking_for_reverse = looking_for.clone();
+    looking_for_reverse.reverse();
+
     let state = State {
         lines,
         cords_to_check: vec![
-            (1, 0),   // To the right
-            (0, 1),   // Down
-            (1, 1),   // Diagonal down right
-            (1, -1),  // Diagonal down left
-            (-1, 0),  // To the left
-            (0, -1),  // Up
-            (-1, -1), // Diagonal up left
-            (-1, 1),  // Diagonal up right
+            (1, 0),  // To the right
+            (1, 1),  // Diagonal down right
+            (0, 1),  // Down
+            (-1, 1), // Diagonal down left
         ],
-        looking_for: "XMAS".chars().collect(),
+        looking_for,
+        looking_for_reverse,
     };
 
     let mut total = 0;
@@ -39,6 +40,7 @@ struct State {
     lines: Vec<Vec<char>>,
     cords_to_check: Vec<(isize, isize)>,
     looking_for: Vec<char>,
+    looking_for_reverse: Vec<char>,
 }
 
 impl State {
@@ -66,14 +68,18 @@ impl State {
     fn check_cord_for_win(&self, x: isize, y: isize) -> Option<usize> {
         let start = self.get(x, y)?;
 
-        if start != self.looking_for[0] {
+        let search_needle = if start == self.looking_for[0] {
+            &self.looking_for
+        } else if start == self.looking_for_reverse[0] {
+            &self.looking_for_reverse
+        } else {
             return None;
-        }
+        };
 
         let mut found = 0;
 
         'outer: for (dx, dy) in self.cords_to_check.iter() {
-            for remainder in 1..self.looking_for.len() {
+            for remainder in 1..search_needle.len() {
                 let x_to_check = x + (dx * remainder as isize);
                 let y_to_check = y + (dy * remainder as isize);
 
@@ -82,7 +88,7 @@ impl State {
                     None => continue 'outer,
                 };
 
-                if next != self.looking_for[remainder] {
+                if next != search_needle[remainder] {
                     continue 'outer;
                 }
             }
