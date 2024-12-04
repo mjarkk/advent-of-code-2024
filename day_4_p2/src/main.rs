@@ -11,8 +11,8 @@ fn main() {
     let state = State { lines };
 
     let mut total = 0;
-    for x in 0..state.max_x() {
-        for y in 0..state.max_y() {
+    for x in 1..state.max_x() - 1 {
+        for y in 1..state.max_y() - 1 {
             if state.check_cord_for_win(x, y).is_some() {
                 total += 1;
             }
@@ -55,16 +55,29 @@ impl State {
         }
 
         let top_left = self.get(x - 1, y - 1)?;
-        let top_right = self.get(x + 1, y - 1)?;
-        let bottom_left = self.get(x - 1, y + 1)?;
-        let bottom_right = self.get(x + 1, y + 1)?;
-
-        match (top_left, bottom_right, top_right, bottom_left) {
-            ('M', 'S', 'M', 'S') => Some(()),
-            ('S', 'M', 'S', 'M') => Some(()),
-            ('M', 'S', 'S', 'M') => Some(()),
-            ('S', 'M', 'M', 'S') => Some(()),
-            _ => None,
+        if top_left != 'M' && top_left != 'S' {
+            return None;
         }
+        let bottom_right = self.get(x + 1, y + 1)?;
+        if bottom_right != 'M' && bottom_right != 'S' {
+            return None;
+        }
+        if top_left == bottom_right {
+            return None;
+        }
+
+        let top_right = self.get(x + 1, y - 1)?;
+        if top_right != 'M' && top_right != 'S' {
+            return None;
+        }
+        let bottom_left = self.get(x - 1, y + 1)?;
+        if bottom_left != 'M' && bottom_left != 'S' {
+            return None;
+        }
+        if top_right == bottom_left {
+            return None;
+        }
+
+        Some(())
     }
 }
