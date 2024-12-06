@@ -41,12 +41,7 @@ fn main() {
     }
     puzzle_size.total = puzzle_size.width * puzzle_size.height;
 
-    let found_out = resolve(
-        &walls,
-        player_location.clone(),
-        &puzzle_size,
-        &mut location_flags,
-    );
+    let found_out = resolve(&walls, player_location, &puzzle_size, &mut location_flags);
     if !found_out {
         panic!("No solution found");
     }
