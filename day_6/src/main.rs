@@ -1,121 +1,168 @@
-use std::{collections::HashSet, fs};
+use std::fs;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-struct Cord {
-    x: i16,
-    y: i16,
-}
-
-impl Cord {
-    fn with_offset(&self, offset: &Self) -> Self {
-        Self {
-            x: self.x + offset.x,
-            y: self.y + offset.y,
-        }
-    }
+struct PuzzleSize {
+    width: usize,
+    height: usize,
+    total: usize,
 }
 
 fn main() {
+    use std::time::Instant;
+    let now = Instant::now();
+
     let puzzle = fs::read_to_string("./puzzle.txt").unwrap();
 
-    let mut walls: HashSet<Cord> = HashSet::new();
-    let mut player_location = Cord { x: 0, y: 0 };
-
-    let mut puzzle_width = 0;
-    let mut puzzle_height = 0;
+    let mut walls: Vec<bool> = Vec::with_capacity(puzzle.len());
+    let mut player_location = 0;
+    let mut puzzle_size = PuzzleSize {
+        width: 0,
+        height: 0,
+        total: 0,
+    };
+    let mut locations_flags: Vec<u8> = Vec::with_capacity(puzzle.len());
     for (line_idx, line) in puzzle.lines().enumerate() {
-        puzzle_width = line.len() as i16;
-        puzzle_height += 1;
+        puzzle_size.width = line.len();
+        puzzle_size.height += 1;
         for (char_idx, c) in line.chars().enumerate() {
+            locations_flags.push(0);
             match c {
                 '#' => {
-                    walls.insert(Cord {
-                        y: line_idx as i16,
-                        x: char_idx as i16,
-                    });
+                    walls.push(true);
                 }
                 '^' => {
-                    player_location = Cord {
-                        y: line_idx as i16,
-                        x: char_idx as i16,
-                    };
+                    walls.push(false);
+                    player_location = line_idx * puzzle_size.width + char_idx;
                 }
-                _ => {}
+                _ => {
+                    walls.push(false);
+                }
             };
         }
     }
+    puzzle_size.total = puzzle_size.width * puzzle_size.height;
 
     let visited_locations = resolve(
-        walls.clone(),
+        &walls,
         player_location.clone(),
-        puzzle_height,
-        puzzle_width,
+        &puzzle_size,
+        &mut locations_flags,
+        false,
     )
     .unwrap();
 
     println!("part1 {}", visited_locations.len());
 
     let mut answer_p2 = 0;
-    for visited_location in visited_locations.clone() {
-        let mut walls_with_paradox = walls.clone();
-        walls_with_paradox.insert(visited_location);
+    for visited_location in visited_locations {
+        walls[visited_location] = true;
 
         if resolve(
-            walls_with_paradox,
+            &walls,
             player_location.clone(),
-            puzzle_height,
-            puzzle_width,
+            &puzzle_size,
+            &mut locations_flags,
+            true,
         )
         .is_none()
         {
             answer_p2 += 1;
         }
+
+        walls[visited_location] = false;
     }
 
     println!("part2 {}", answer_p2);
+
+    let elapsed = now.elapsed();
+    println!("Elapsed: {:.2?}", elapsed);
 }
 
+const DIRECTION_UP: u8 = 0b0000_0001;
+const DIRECTION_LEFT: u8 = 0b0000_0010;
+const DIRECTION_DOWN: u8 = 0b0000_0100;
+const DIRECTION_RIGHT: u8 = 0b0000_1000;
+
 fn resolve(
-    walls: HashSet<Cord>,
-    mut player_location: Cord,
-    puzzle_height: i16,
-    puzzle_width: i16,
-) -> Option<HashSet<Cord>> {
-    let directions: [Cord; 4] = [
-        Cord { x: 1, y: 0 },  // right
-        Cord { x: 0, y: 1 },  // down
-        Cord { x: -1, y: 0 }, // left
-        Cord { x: 0, y: -1 }, // up
+    walls: &Vec<bool>,
+    mut player_location: usize,
+    puzzle_size: &PuzzleSize,
+    location_flags: &mut Vec<u8>,
+    skip_resp: bool,
+) -> Option<Vec<usize>> {
+    let directions: [u8; 4] = [
+        DIRECTION_RIGHT,
+        DIRECTION_DOWN,
+        DIRECTION_LEFT,
+        DIRECTION_UP,
     ];
-    let mut direction = Cord { x: 0, y: -1 };
     let mut direction_idx = 3;
+    let mut direction = directions[direction_idx];
 
-    let mut visited_locations: HashSet<Cord> = HashSet::new();
-    visited_locations.insert(player_location);
-    let mut iter = 0;
+    // Reset all the flags
+    for idx in 0..location_flags.len() {
+        location_flags[idx] = 0;
+    }
+
+    location_flags[player_location] = direction;
+
     loop {
-        iter += 1;
-        if iter > 10_000 {
-            return None;
-        }
+        let new_player_location = match direction {
+            DIRECTION_UP => {
+                let y = player_location / puzzle_size.width;
+                if y == 0 {
+                    break;
+                }
+                player_location - puzzle_size.width
+            }
+            DIRECTION_LEFT => {
+                let x = player_location % puzzle_size.width;
+                if x == 0 {
+                    break;
+                }
+                player_location - 1
+            }
+            DIRECTION_DOWN => {
+                let y = player_location / puzzle_size.width;
+                if y == puzzle_size.height - 1 {
+                    break;
+                }
+                player_location + puzzle_size.width
+            }
+            DIRECTION_RIGHT => {
+                let x = player_location % puzzle_size.width;
+                if x == puzzle_size.width - 1 {
+                    break;
+                }
+                player_location + 1
+            }
+            _ => {
+                break;
+            }
+        };
 
-        let new_player_location = player_location.with_offset(&direction);
-        if new_player_location.x < 0
-            || new_player_location.y < 0
-            || new_player_location.x >= puzzle_width
-            || new_player_location.y >= puzzle_height
-        {
-            break;
-        }
-
-        if walls.contains(&new_player_location) {
+        if walls[new_player_location] {
             direction_idx = (direction_idx + 1) % 4;
             direction = directions[direction_idx];
             continue;
         }
 
         player_location = new_player_location;
-        visited_locations.insert(player_location);
+        let flags = location_flags[new_player_location];
+        if flags == flags | direction {
+            return None;
+        }
+        location_flags[new_player_location] = flags | direction;
+    }
+
+    if skip_resp {
+        return Some(Vec::new());
+    }
+
+    let mut visited_locations: Vec<usize> = Vec::new();
+    for (idx, flags) in location_flags.iter().enumerate() {
+        if *flags != 0 {
+            visited_locations.push(idx);
+        }
     }
 
     Some(visited_locations)
