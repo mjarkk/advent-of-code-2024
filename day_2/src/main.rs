@@ -1,6 +1,9 @@
 use std::fs;
+use std::time::Instant;
 
 fn main() {
+    let now = Instant::now();
+
     let contents = fs::read_to_string("./puzzle.txt").unwrap();
     let mut safe_reports = 0;
 
@@ -33,6 +36,7 @@ fn main() {
     }
 
     println!("{}", safe_reports);
+    println!("Elapsed: {:.2?}", now.elapsed());
 }
 
 fn collection_valid(line: &Vec<i16>) -> bool {
