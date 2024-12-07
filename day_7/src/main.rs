@@ -1,14 +1,51 @@
 use std::fs;
+use std::sync::mpsc::channel;
+use std::thread;
 use std::time::Instant;
 
 fn main() {
     let now = Instant::now();
     let puzzle = fs::read_to_string("./puzzle.txt").unwrap();
 
+    let paralism = thread::available_parallelism().unwrap().get();
+    let mut chunks: Vec<Vec<String>> = Vec::with_capacity(paralism);
+    for _ in 0..paralism {
+        chunks.push(Vec::new());
+    }
+    for (idx, line) in puzzle.lines().enumerate() {
+        chunks[idx % paralism].push(line.to_string());
+    }
+
+    let (sender, receiver) = channel::<(usize, usize)>();
+
+    for chunk in chunks {
+        let sender_clone = sender.clone();
+        thread::spawn(move || {
+            let results = solve_chunk(chunk);
+            let _ = sender_clone.send(results);
+        });
+    }
+    drop(sender);
+
     let mut result_p1 = 0usize;
     let mut result_p2 = 0usize;
 
-    for line in puzzle.lines() {
+    while let Ok((p1, p2)) = receiver.recv() {
+        result_p1 += p1;
+        result_p2 += p2;
+    }
+
+    println!("p1 {}", result_p1);
+    println!("p2 {}", result_p1 + result_p2);
+
+    println!("Elapsed: {:.2?}", now.elapsed());
+}
+
+fn solve_chunk(chunk: Vec<String>) -> (usize, usize) {
+    let mut result_p1 = 0usize;
+    let mut result_p2 = 0usize;
+
+    for line in chunk {
         if line.is_empty() {
             continue;
         }
@@ -32,22 +69,7 @@ fn main() {
         }
     }
 
-    println!("p1 {}", result_p1);
-    println!("p2 {}", result_p1 + result_p2);
-
-    println!("Elapsed: {:.2?}", now.elapsed());
-}
-
-fn check_nothing_to_solve(expected_result: usize, numbers: &Vec<usize>) -> Option<Result> {
-    match numbers.len() {
-        0 => Some(Result::NotSolved),
-        1 => Some(if numbers[0] == expected_result {
-            Result::Solved
-        } else {
-            Result::NotSolved
-        }),
-        _ => None,
-    }
+    (result_p1, result_p2)
 }
 
 enum Result {
@@ -58,20 +80,30 @@ enum Result {
 
 struct Solver {
     numbers: Vec<usize>,
+    expected: usize,
 }
 
 impl Solver {
     fn solve(expected: usize, numbers: Vec<usize>) -> Result {
-        if let Some(result) = check_nothing_to_solve(expected, &numbers) {
+        let first_nr = numbers[0];
+        let solver = Self { numbers, expected };
+
+        if let Some(result) = solver.check_nothing_to_solve() {
             return result;
         }
 
-        let first_nr = numbers[0];
-        let solver = Self { numbers };
-
-        solver.solve_recursive(expected, first_nr, 1)
+        solver.solve_recursive(first_nr, 1)
     }
-    fn solve_recursive(&self, expected: usize, current: usize, offset: usize) -> Result {
+    fn check_nothing_to_solve(&self) -> Option<Result> {
+        if self.numbers.len() != 1 {
+            None
+        } else if self.numbers[0] == self.expected {
+            Some(Result::Solved)
+        } else {
+            Some(Result::NotSolved)
+        }
+    }
+    fn solve_recursive(&self, current: usize, offset: usize) -> Result {
         let next = self.numbers[offset];
         let is_last_element = offset == self.numbers.len() - 1;
 
@@ -96,12 +128,12 @@ impl Solver {
                 _ => panic!("Unknown operator"),
             };
 
-            if result > expected {
+            if result > self.expected {
                 continue;
             }
 
             if is_last_element {
-                if result == expected {
+                if result == self.expected {
                     return if operator == 2 {
                         Result::SolvedWithCombinator
                     } else {
@@ -111,7 +143,7 @@ impl Solver {
                 continue;
             }
 
-            match self.solve_recursive(expected, result, offset + 1) {
+            match self.solve_recursive(result, offset + 1) {
                 Result::Solved => {
                     return if operator == 2 {
                         Result::SolvedWithCombinator
