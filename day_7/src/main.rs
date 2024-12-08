@@ -33,7 +33,7 @@ fn main() {
     }
 
     println!("p1 {}", result_p1);
-    println!("p2 {}", result_p1 + result_p2);
+    println!("p2 {}", result_p1 + result_p2,);
 
     println!("Elapsed: {:.2?}", now.elapsed());
 }
@@ -58,15 +58,7 @@ impl Solver {
             return result;
         }
 
-        match solver.solve_recursive_reverse(expected, solver.numbers.len() - 1, false) {
-            Result::Solved => return Result::Solved,
-            Result::SolvedWithCombinator => panic!("wut? this should not happen"),
-            Result::NotSolved => {
-                // try the same with the combine operator
-            }
-        };
-
-        solver.solve_recursive_reverse(expected, solver.numbers.len() - 1, true)
+        solver.solve_recursive_reverse(expected, solver.numbers.len() - 1)
     }
     fn check_nothing_to_solve(&self) -> Option<Result> {
         if self.numbers.len() != 1 {
@@ -77,12 +69,7 @@ impl Solver {
             Some(Result::NotSolved)
         }
     }
-    fn solve_recursive_reverse(
-        &self,
-        current_answer: usize,
-        offset: usize,
-        use_combine_operator: bool,
-    ) -> Result {
+    fn solve_recursive_reverse(&self, current_answer: usize, offset: usize) -> Result {
         let nr = self.numbers[offset];
 
         if offset == 0 {
@@ -93,28 +80,32 @@ impl Solver {
             };
         }
 
-        for operator in 0..(if use_combine_operator { 3 } else { 2 }) {
+        let mut fallback_answer = Result::NotSolved;
+        for operator in 0..3 {
             let new_answer = match operator {
                 0 => {
-                    if nr > current_answer {
+                    if nr >= current_answer {
                         continue;
                     }
                     current_answer - nr
                 }
                 1 => {
-                    if nr > current_answer || current_answer % nr != 0 {
+                    if nr >= current_answer || current_answer % nr != 0 {
                         continue;
                     }
                     current_answer / nr
                 }
-                2 => match cut_number_from_end(nr, current_answer) {
-                    Some(answer) => answer,
-                    None => continue,
-                },
+                2 => {
+                    let new_answer = cut_number_from_end(nr, current_answer);
+                    if new_answer == 0 {
+                        continue;
+                    }
+                    new_answer
+                }
                 _ => panic!("Unknown operator"),
             };
 
-            match self.solve_recursive_reverse(new_answer, offset - 1, use_combine_operator) {
+            match self.solve_recursive_reverse(new_answer, offset - 1) {
                 Result::Solved => {
                     return if operator == 2 {
                         Result::SolvedWithCombinator
@@ -122,16 +113,21 @@ impl Solver {
                         Result::Solved
                     };
                 }
-                Result::SolvedWithCombinator => return Result::SolvedWithCombinator,
+                Result::SolvedWithCombinator => {
+                    // Solving in reverse for some rows in my puzzle it's possible to solve it multiple ways using the operators
+                    // As answers using the combinator operator are not allowed for the first part we want to check first if there are still alternative solutions.
+                    // Hence the fallback_answer
+                    fallback_answer = Result::SolvedWithCombinator;
+                }
                 Result::NotSolved => { /* Do nothing */ }
             }
         }
 
-        Result::NotSolved
+        fallback_answer
     }
 }
 
-fn cut_number_from_end(ends_with: usize, nr: usize) -> Option<usize> {
+fn cut_number_from_end(ends_with: usize, nr: usize) -> usize {
     let mut exp = 1u32;
     let mut temp = ends_with;
     loop {
@@ -145,13 +141,8 @@ fn cut_number_from_end(ends_with: usize, nr: usize) -> Option<usize> {
 
     let power = usize::pow(10, exp);
     if (nr % power) != ends_with {
-        return None;
+        return 0;
     }
 
-    let new_nr = (nr - ends_with) / power;
-    if new_nr == 0 {
-        return None;
-    }
-
-    Some(new_nr)
+    (nr - ends_with) / power
 }
