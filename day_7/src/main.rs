@@ -8,34 +8,35 @@ fn main() {
     let mut result_p1 = 0usize;
     let mut result_p2 = 0usize;
 
+    let mut numbers: Vec<usize> = Vec::with_capacity(12);
     for line in puzzle.lines() {
         if line.is_empty() {
             continue;
         }
 
-        let mut result = 0usize;
-        let mut numbers: Vec<usize> = Vec::new();
-        for (idx, part) in line.split(" ").enumerate() {
-            if idx == 0 {
-                result = part[0..part.len() - 1].parse().unwrap();
-                continue;
-            }
+        numbers.clear();
 
+        let mut parts = line.split(" ");
+        let expected_result = parts.next().unwrap();
+        let expected_result = expected_result[0..expected_result.len() - 1]
+            .parse()
+            .unwrap();
+
+        for part in parts {
             let number: usize = part.parse().unwrap();
             numbers.push(number);
         }
 
-        match Solver::solve(result, numbers) {
-            Result::Solved => result_p1 += result,
-            Result::SolvedWithCombinator => result_p2 += result,
+        match Solver::solve(expected_result, &numbers) {
+            Result::Solved => result_p1 += expected_result,
+            Result::SolvedWithCombinator => result_p2 += expected_result,
             Result::NotSolved => { /* Do nothing */ }
         }
     }
 
-    println!("p1 {}", result_p1);
-    println!("p2 {}", result_p1 + result_p2,);
-
-    println!("Elapsed: {:.2?}", now.elapsed());
+    println!("{}", result_p1);
+    println!("{}", result_p1 + result_p2);
+    println!("{:.2?}", now.elapsed());
 }
 
 enum Result {
@@ -44,13 +45,13 @@ enum Result {
     NotSolved,
 }
 
-struct Solver {
-    numbers: Vec<usize>,
+struct Solver<'a> {
+    numbers: &'a Vec<usize>,
     expected: usize,
 }
 
-impl Solver {
-    fn solve(expected: usize, numbers: Vec<usize>) -> Result {
+impl<'a> Solver<'a> {
+    fn solve(expected: usize, numbers: &'a Vec<usize>) -> Result {
         // let first_nr = numbers[0];
         let solver = Self { numbers, expected };
 
@@ -80,17 +81,16 @@ impl Solver {
             };
         }
 
+        if nr > current_answer {
+            return Result::NotSolved;
+        }
+
         let mut fallback_answer = Result::NotSolved;
         for operator in 0..3 {
             let new_answer = match operator {
-                0 => {
-                    if nr >= current_answer {
-                        continue;
-                    }
-                    current_answer - nr
-                }
+                0 => current_answer - nr,
                 1 => {
-                    if nr >= current_answer || current_answer % nr != 0 {
+                    if current_answer % nr != 0 {
                         continue;
                     }
                     current_answer / nr
