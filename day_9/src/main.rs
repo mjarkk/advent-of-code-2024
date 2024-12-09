@@ -1,10 +1,16 @@
-use std::fs;
 use std::time::Instant;
+use std::{fs, usize};
 
 #[derive(Clone)]
-struct Block {
+struct File {
     size: usize,
-    file_id: Option<usize>,
+    id: usize,
+}
+
+#[derive(Clone)]
+struct Empty {
+    size: usize,
+    position: usize,
 }
 
 fn main() {
@@ -12,10 +18,13 @@ fn main() {
     let puzzle = fs::read_to_string("./puzzle.txt").unwrap();
 
     let mut raw_output: Vec<Option<usize>> = Vec::new();
-    let mut blocks: Vec<Block> = Vec::new();
     let mut empty_indexes: Vec<usize> = Vec::new();
+    let mut file_positions: Vec<usize> = Vec::new();
+    let mut files: Vec<File> = Vec::new();
+    let mut emptyness: Vec<Empty> = Vec::new();
     let mut file_id = 0;
     let mut is_file_blok = true;
+    let mut offset = 0;
     for c in puzzle.chars() {
         if c == '\n' {
             continue;
@@ -30,23 +39,40 @@ fn main() {
             for _ in 0..value {
                 raw_output.push(Some(file_id));
             }
-            blocks.push(Block {
+            files.push(File {
                 size: value,
-                file_id: Some(file_id),
+                id: file_id,
             });
+            file_positions.push(offset);
             file_id += 1;
         } else {
             for _ in 0..value {
                 raw_output.push(None);
                 empty_indexes.push(raw_output.len() - 1);
             }
-            blocks.push(Block {
+            emptyness.push(Empty {
                 size: value,
-                file_id: None,
+                position: offset,
             });
         }
+        offset += value;
         is_file_blok = !is_file_blok;
     }
+
+    // let mut data: Vec<char> = (0..offset).map(|_| '_').collect();
+    // for (idx, file) in files.iter().enumerate() {
+    //     let position = file_positions[idx];
+    //     for offset in 0..file.size {
+    //         data[position + offset] = file.id.to_string().chars().next().unwrap();
+    //     }
+    // }
+    // for empty in emptyness.iter() {
+    //     for offset in 0..empty.size {
+    //         data[empty.position + offset] = '.';
+    //     }
+    // }
+    // let debug_data: String = data.iter().collect();
+    // println!("{}", debug_data);
 
     // Solve part 1
     'outer: for empty_index in empty_indexes.iter() {
@@ -75,66 +101,77 @@ fn main() {
     println!("p1: {}", check_sum);
     println!("Elapsed: {:.2?}", now.elapsed());
 
-    for idx in (0..blocks.len()).rev() {
-        let block = blocks.get(idx).unwrap();
-        if idx == 1 {
-            break;
-        }
-        if block.file_id.is_none() {
+    // Solve part 2
+    let mut not_found_solusions_for_size = usize::MAX;
+    for (idx, file) in files.iter().enumerate().rev() {
+        if file.size >= not_found_solusions_for_size {
             continue;
         }
 
-        // Find the first empty block that can fit this block
-        let mut empty_block_idx = None;
-        for needle_idx in 0..idx {
-            if needle_idx >= idx {
+        let file_position = file_positions[idx];
+
+        // Check if we can place this file in the empty space
+        let mut found_empty_segment: Option<(usize, Empty)> = None;
+        for (idx, empty_segment) in emptyness.iter().enumerate() {
+            if empty_segment.position >= file_position {
                 break;
             }
 
-            let needle = blocks.get(needle_idx).unwrap();
-            if needle.file_id.is_none() && needle.size >= block.size {
-                empty_block_idx = Some(needle_idx);
+            if file.size <= empty_segment.size {
+                found_empty_segment = Some((idx, empty_segment.clone()));
                 break;
             }
         }
 
-        let (empty_block, empty_block_idx) = match empty_block_idx {
-            None => continue,
-            Some(empty_block_idx) => (blocks.get(empty_block_idx).unwrap(), empty_block_idx),
-        };
-
-        let mut new_blocks = blocks.clone();
-
-        new_blocks[idx] = Block {
-            size: block.size,
-            file_id: None,
-        };
-
-        if empty_block.size == block.size {
-            // Replace this block with ours
-            new_blocks[empty_block_idx] = block.clone();
-        } else {
-            // Split the block
-            let mut new_empty_block = empty_block.clone();
-            new_empty_block.size -= block.size;
-            new_blocks[empty_block_idx] = block.clone();
-            new_blocks.insert(empty_block_idx + 1, new_empty_block);
-        }
-
-        blocks = new_blocks;
-    }
-
-    let mut check_sum = 0;
-    let mut offset = 0;
-    for block in blocks.iter() {
-        if let Some(file_id) = block.file_id {
-            for idx in 0..block.size {
-                check_sum += (idx + offset) * file_id;
+        let (empty_segment_idx, empty_segment) = match found_empty_segment {
+            Some(v) => v,
+            None => {
+                if file.size < not_found_solusions_for_size {
+                    not_found_solusions_for_size = file.size;
+                }
+                continue;
             }
+        };
+
+        // Move the file to the empty segment
+        file_positions[idx] = empty_segment.position;
+
+        if empty_segment.size == file.size {
+            // Remove the empty segment as file is exactly the same size
+            emptyness.remove(empty_segment_idx);
+            continue;
         }
-        offset += block.size;
+
+        // Update the empty segment as the file is smaller than the empty segment
+        emptyness[empty_segment_idx] = Empty {
+            size: empty_segment.size - file.size,
+            position: empty_segment.position + file.size,
+        };
     }
 
-    println!("p2: {}", check_sum);
+    // let mut data: Vec<char> = (0..offset).map(|_| '_').collect();
+    // for (idx, file) in files.iter().enumerate() {
+    //     let position = file_positions[idx];
+    //     for offset in 0..file.size {
+    //         data[position + offset] = file.id.to_string().chars().next().unwrap();
+    //     }
+    // }
+    // for empty in emptyness.iter() {
+    //     for offset in 0..empty.size {
+    //         data[empty.position + offset] = '.';
+    //     }
+    // }
+    // let debug_data: String = data.iter().collect();
+    // println!("{}", debug_data);
+
+    let mut answer_p2 = 0;
+    for (idx, file) in files.iter().enumerate() {
+        let file_position = file_positions[idx];
+        for offset in 0..file.size {
+            answer_p2 += file.id * (file_position + offset);
+        }
+    }
+
+    println!("p2: {}", answer_p2);
     println!("Elapsed: {:.2?}", now.elapsed());
 }
