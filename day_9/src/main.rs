@@ -66,15 +66,6 @@ fn main() {
         }
     }
 
-    // for c in raw_output.iter() {
-    //     if let Some(c) = c {
-    //         print!("{}", c);
-    //     } else {
-    //         print!(".");
-    //     }
-    // }
-    // println!("");
-
     let mut check_sum = 0;
     for (idx, c) in raw_output.iter().enumerate() {
         if let Some(c) = c {
@@ -82,6 +73,7 @@ fn main() {
         }
     }
     println!("p1: {}", check_sum);
+    println!("Elapsed: {:.2?}", now.elapsed());
 
     for idx in (0..blocks.len()).rev() {
         let block = blocks.get(idx).unwrap();
@@ -132,19 +124,6 @@ fn main() {
         blocks = new_blocks;
     }
 
-    // for block in blocks.iter() {
-    //     if let Some(file_id) = block.file_id {
-    //         for _ in 0..block.size {
-    //             print!("{}", file_id);
-    //         }
-    //     } else {
-    //         for _ in 0..block.size {
-    //             print!(".");
-    //         }
-    //     }
-    // }
-    // println!("");
-
     let mut check_sum = 0;
     let mut offset = 0;
     for block in blocks.iter() {
@@ -156,7 +135,6 @@ fn main() {
         offset += block.size;
     }
 
-    println!("p1: {}", check_sum);
-
+    println!("p2: {}", check_sum);
     println!("Elapsed: {:.2?}", now.elapsed());
 }
