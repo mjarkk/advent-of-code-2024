@@ -22,18 +22,21 @@ fn main() {
     let mut p1_answer = 0;
     let mut p2_answer = 0;
 
+    let mut all_paths: Vec<(usize, usize)> = Vec::new();
+    let mut paths_with_unique_end: HashSet<(usize, usize)> = HashSet::new();
     for (cord, nr) in solver.map.iter() {
         if *nr != 0 {
             continue;
         }
 
-        let mut all_paths: Vec<(usize, usize)> = Vec::new();
+        all_paths.clear();
+        paths_with_unique_end.clear();
+
         solver.try_solve(cord, 1, &mut all_paths);
         p2_answer += all_paths.len();
 
-        let mut paths_with_unique_end: HashSet<(usize, usize)> = HashSet::new();
-        for path in all_paths {
-            paths_with_unique_end.insert(path);
+        for path in all_paths.iter() {
+            paths_with_unique_end.insert(*path);
         }
         p1_answer += paths_with_unique_end.len();
     }
