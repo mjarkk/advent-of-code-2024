@@ -72,33 +72,31 @@ fn calculate_next(numbers: &mut HashMap<usize, usize>, new_numbers: &mut HashMap
     for (input, total) in numbers.iter() {
         let input = *input;
         if input == 0 {
-            // Replace with 1
+            // Replace all zeros with ones
             let prev = *new_numbers.get(&1).unwrap_or(&0);
             new_numbers.insert(1, prev + total);
 
             continue;
         }
 
-        if input >= 10 {
-            let input_len = number_len(input);
-            if input_len % 2 == 0 {
-                // Split in half
-                let half = input_len / 2;
-                let base = 10usize.pow(half);
+        let input_len = number_len(input);
+        if input_len % 2 == 0 {
+            // Split al evenly length numbers in half
+            let half = input_len / 2;
+            let base = 10usize.pow(half);
 
-                let left = input % base;
-                let right = (input - left) / base;
+            let left = input % base;
+            let right = (input - left) / base;
 
-                let prev_left = *new_numbers.get(&left).unwrap_or(&0);
-                new_numbers.insert(left, prev_left + total);
+            let prev_left = *new_numbers.get(&left).unwrap_or(&0);
+            new_numbers.insert(left, prev_left + total);
 
-                let prev_right = *new_numbers.get(&right).unwrap_or(&0);
-                new_numbers.insert(right, prev_right + total);
-                continue;
-            }
+            let prev_right = *new_numbers.get(&right).unwrap_or(&0);
+            new_numbers.insert(right, prev_right + total);
+            continue;
         }
 
-        // Multiply by 2024
+        // Multiply remainder by 2024
         let key = input * 2024;
         let prev = *new_numbers.get(&key).unwrap_or(&0);
         new_numbers.insert(key, prev + total);
