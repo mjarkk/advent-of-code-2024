@@ -1,5 +1,5 @@
+use std::collections::HashMap;
 use std::fs;
-use std::thread;
 use std::time::Instant;
 
 fn main() {
@@ -14,17 +14,7 @@ fn main() {
         break;
     }
 
-    let mut result = 0;
-    for (idx, nr) in numbers.iter().enumerate() {
-        let start = Instant::now();
-        result += total(*nr, 75, 1);
-        println!(
-            "{} / {} took {:.2?}",
-            idx + 1,
-            numbers.len(),
-            start.elapsed()
-        );
-    }
+    let result = new_total(numbers, 75);
 
     println!("{}", result);
     println!("Elapsed: {:.2?}", now.elapsed());
@@ -44,43 +34,59 @@ fn number_len(mut nr: usize) -> u32 {
     nr_len
 }
 
-fn total(input: usize, remaining_iterations: usize, threads: usize) -> usize {
-    if remaining_iterations == 0 {
-        return 1;
+fn new_total(input: Vec<usize>, iterations: usize) -> usize {
+    let mut numbers = HashMap::new();
+
+    for nr in input {
+        let prev = *numbers.get(&nr).unwrap_or(&0);
+        numbers.insert(nr, prev + 1);
     }
 
-    let new_remainder = remaining_iterations - 1;
-    if input == 0 {
-        // Replace with 1
-        return total(1, new_remainder, threads);
-    }
+    for _ in 0..iterations {
+        let mut new_numbers: HashMap<usize, usize> = HashMap::new();
 
-    if input >= 10 {
-        let input_len = number_len(input);
-        // let number_str = nr.to_string();
-        if input_len % 2 == 0 {
-            // Split in half
-            let half = input_len / 2;
-            let base = 10usize.pow(half);
+        for (input, total) in numbers.iter() {
+            let input = *input;
+            if input == 0 {
+                // Replace with 1
+                let prev = *new_numbers.get(&1).unwrap_or(&0);
+                new_numbers.insert(1, prev + total);
 
-            let right = input % base;
-            let left = (input - right) / base;
-
-            if threads >= 16 {
-                return total(left, new_remainder, threads) + total(right, new_remainder, threads);
+                continue;
             }
 
-            let new_threads = threads * 2;
-            let new_threads_clone = new_threads.clone();
-            let new_remainder_clone = new_remainder.clone();
-            let left_result_thread =
-                thread::spawn(move || total(left, new_remainder_clone, new_threads_clone));
+            if input >= 10 {
+                let input_len = number_len(input);
+                if input_len % 2 == 0 {
+                    // Split in half
+                    let half = input_len / 2;
+                    let base = 10usize.pow(half);
 
-            let right_result = total(right, new_remainder, new_threads);
-            return left_result_thread.join().unwrap() + right_result;
+                    let left = input % base;
+                    let right = (input - left) / base;
+
+                    let prev_left = *new_numbers.get(&left).unwrap_or(&0);
+                    new_numbers.insert(left, prev_left + total);
+
+                    let prev_right = *new_numbers.get(&right).unwrap_or(&0);
+                    new_numbers.insert(right, prev_right + total);
+                    continue;
+                }
+            }
+
+            // Multiply by 2024
+            let key = input * 2024;
+            let prev = *new_numbers.get(&key).unwrap_or(&0);
+            new_numbers.insert(key, prev + total);
         }
+
+        numbers = new_numbers;
     }
 
-    // Multiply by 2024
-    return total(input * 2024, new_remainder, threads);
+    let mut result = 0;
+    for (_, total) in numbers.iter() {
+        result += total;
+    }
+
+    result
 }
