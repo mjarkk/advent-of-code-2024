@@ -1,19 +1,18 @@
-use std::cmp::{max, min};
 use std::fs;
 use std::time::Instant;
 
-struct Puzzle {
-    a: (usize, usize),
-    b: (usize, usize),
-    answer: (usize, usize),
+struct Machine {
+    a: (isize, isize),
+    b: (isize, isize),
+    prize: (isize, isize),
 }
 
-impl Default for Puzzle {
+impl Default for Machine {
     fn default() -> Self {
-        Puzzle {
+        Machine {
             a: (0, 0),
             b: (0, 0),
-            answer: (0, 0),
+            prize: (0, 0),
         }
     }
 }
@@ -22,15 +21,15 @@ fn main() {
     let now = Instant::now();
     let input = fs::read_to_string("./puzzle.txt").unwrap();
 
-    let mut puzzles: Vec<Puzzle> = Vec::new();
+    let mut machines: Vec<Machine> = Vec::new();
     for block in input.split("\n\n") {
-        let mut puzzle = Puzzle::default();
+        let mut puzzle = Machine::default();
         let mut has_answer = false;
         for (idx, line) in block.lines().enumerate() {
             if idx < 2 {
                 let x = &line[12..14];
                 let y = &line[18..20];
-                let cords: (usize, usize) = (x.parse().unwrap(), y.parse().unwrap());
+                let cords: (isize, isize) = (x.parse().unwrap(), y.parse().unwrap());
                 if idx == 0 {
                     puzzle.a = cords;
                 } else {
@@ -45,7 +44,7 @@ fn main() {
             let y_str = parts.next().unwrap();
             x_str = x_str.split(',').next().unwrap();
 
-            puzzle.answer = (x_str.parse().unwrap(), y_str.trim().parse().unwrap());
+            puzzle.prize = (x_str.parse().unwrap(), y_str.trim().parse().unwrap());
             has_answer = true;
         }
 
@@ -53,22 +52,20 @@ fn main() {
             continue;
         }
 
-        puzzles.push(puzzle);
+        machines.push(puzzle);
     }
 
-    let mut result_p1 = 0;
-    for puzzle in puzzles.iter() {
-        if let Some(price) = puzzle.solve() {
+    let mut result_p1 = 0isize;
+    for machine in machines.iter() {
+        if let Some(price) = machine.solve(0) {
             result_p1 += price;
         }
     }
     println!("{}", result_p1);
 
-    let mut result_p2 = 0;
-    for puzzle in puzzles.iter_mut() {
-        puzzle.answer.0 *= 10000000000000;
-        puzzle.answer.1 *= 10000000000000;
-        if let Some(price) = puzzle.solve() {
+    let mut result_p2 = 0isize;
+    for machine in machines.iter() {
+        if let Some(price) = machine.solve(10000000000000) {
             result_p2 += price;
         }
     }
@@ -78,143 +75,21 @@ fn main() {
     println!("Elapsed: {:.2?}", now.elapsed());
 }
 
-impl Puzzle {
-    fn solve(&self) -> Option<usize> {
-        let potential_solusions = combinations_result_in(self.a, self.b, self.answer);
+impl Machine {
+    fn solve(&self, offset: isize) -> Option<isize> {
+        let prize = (self.prize.0 + offset, self.prize.1 + offset);
+        let det = self.a.0 * self.b.1 - self.a.1 * self.b.0;
 
-        match potential_solusions.len() {
-            0 => None,
-            1 => Some(calculate_price(potential_solusions[0])),
-            _ => {
-                let mut prices: Vec<usize> = potential_solusions
-                    .iter()
-                    .map(|s| calculate_price(*s))
-                    .collect();
+        let a_multiplier = (prize.0 * self.b.1 - prize.1 * self.b.0) / det;
+        let b_multiplier = (self.a.0 * prize.1 - self.a.1 * prize.0) / det;
 
-                prices.sort();
+        let a_answer = self.a.0 * a_multiplier + self.b.0 * b_multiplier;
+        let b_answer = self.a.1 * a_multiplier + self.b.1 * b_multiplier;
 
-                Some(prices[0])
-            }
+        if (a_answer, b_answer) == (prize.0, prize.1) {
+            Some(a_multiplier * 3 + b_multiplier)
+        } else {
+            None
         }
     }
-}
-
-fn calculate_price((a, b): (usize, usize)) -> usize {
-    (a * 3) + b
-}
-
-fn combinations_result_in(
-    a: (usize, usize),
-    b: (usize, usize),
-    price: (usize, usize),
-) -> Vec<(usize, usize)> {
-    let bx_fits_total_of = price.0 / b.0;
-    let by_fits_total_of = price.1 / b.1;
-
-    let b_range_max = min(bx_fits_total_of, by_fits_total_of);
-    let b_range_min = if b_range_max > 100_000 {
-        b_range_max - 100_000
-    } else {
-        0
-    };
-
-    let mut solusions = Vec::new();
-    for b_times in (b_range_min..=min(bx_fits_total_of, by_fits_total_of)).rev() {
-        let x = b_times * b.0;
-        let y = b_times * b.1;
-
-        if x == price.0 && y == price.1 {
-            // Exact match
-            solusions.push((0, b_times));
-            continue;
-        }
-
-        let x_remainder = price.0 - x;
-        let y_remainder = price.1 - y;
-
-        if x_remainder % a.0 != 0 || y_remainder % a.1 != 0 {
-            continue;
-        }
-
-        let ax_times = x_remainder / a.0;
-        let ay_times = y_remainder / a.1;
-        if ax_times != ay_times {
-            continue;
-        }
-
-        solusions.push((ax_times, b_times));
-    }
-
-    if b_range_min > 0 {
-        for b_times in 0..=100_000 {
-            let x = b_times * b.0;
-            let y = b_times * b.1;
-
-            if x == price.0 && y == price.1 {
-                // Exact match
-                solusions.push((0, b_times));
-                continue;
-            }
-
-            let x_remainder = price.0 - x;
-            let y_remainder = price.1 - y;
-
-            if x_remainder % a.0 != 0 || y_remainder % a.1 != 0 {
-                continue;
-            }
-
-            let ax_times = x_remainder / a.0;
-            let ay_times = y_remainder / a.1;
-            if ax_times != ay_times {
-                continue;
-            }
-
-            solusions.push((ax_times, b_times));
-        }
-    }
-
-    solusions
-
-    // let a_cheap_total = result / a.1;
-    // let b_cheap_total = result / b.1;
-    // let cheap_total = max(a_cheap_total, b_cheap_total);
-
-    // let b_fits_total_of = result / a.1;
-    // let a_fits_total_of = max(result / a.0, 1000);
-
-    // let b_fits_total_of_min = if b_fits_total_of > 1000 {
-    //     b_fits_total_of - 1000
-    // } else {
-    //     0
-    // };
-
-    // let mut response: Vec<(usize, usize)> = Vec::new();
-    // for b_times in b_fits_total_of_min..=b_fits_total_of {
-    //     let b_total = b_times * a.1;
-    //     if b_total == result {
-    //         return vec![(0, b_times)];
-    //     }
-
-    //     let remainder = result - b_total;
-    //     if remainder % a.0 != 0 {
-    //         continue;
-    //     }
-
-    //     for a_times in 1..=a_fits_total_of {
-    //         let total = a_times * a.0 + b_total;
-    //         if total > result {
-    //             break;
-    //         }
-
-    //         if total != result {
-    //             continue;
-    //         }
-
-    //         let alternative_total = alternative_a * a_times + alternative_b * b_times;
-    //         if alternative_total == result {
-    //             response.push((a_times, b_times));
-    //             break;
-    //         }
-    //     }
-    // }
 }
