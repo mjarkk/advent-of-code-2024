@@ -53,12 +53,18 @@ fn main() {
     println!("p1: {}", answer_p1);
 
     let mut attempts = 0;
+    let mut path: Vec<(usize, usize)> = Vec::new();
     for idx in CUT_OFF..corrupted_areas.len() {
         attempts += 1;
 
         // Add the new corrupted area
         let (x, y) = corrupted_areas[idx];
         state.map[y][x] = Tail::Corrupt;
+
+        if !path.contains(&(x, y)) && idx != CUT_OFF {
+            continue;
+        }
+        path.clear();
 
         // Reset the map state
         for y in 0..=MAP_SIZE {
@@ -69,7 +75,7 @@ fn main() {
             }
         }
 
-        if !state.can_reach_end(0, 0) {
+        if !state.can_reach_end(0, 0, &mut path) {
             println!("p2: {},{}", x, y);
             println!("Attempts: {}", attempts);
             break;
@@ -82,8 +88,9 @@ fn main() {
 impl State {
     // Check if we can find a path to the end of the map
     // Compared to find_lowest_cost_path_to_end, this function is faster as we can stop as soon as we find a path
-    fn can_reach_end(&mut self, x: usize, y: usize) -> bool {
+    fn can_reach_end(&mut self, x: usize, y: usize, path: &mut Vec<(usize, usize)>) -> bool {
         if x == MAP_SIZE && y == MAP_SIZE {
+            path.push((x, y));
             return true;
         }
 
@@ -97,22 +104,26 @@ impl State {
         self.map[y][x] = Tail::Visitable(Some(1));
 
         // Check down:
-        if y < MAP_SIZE && self.can_reach_end(x, y + 1) {
+        if y < MAP_SIZE && self.can_reach_end(x, y + 1, path) {
+            path.push((x, y));
             return true;
         }
 
         // Check right:
-        if x < MAP_SIZE && self.can_reach_end(x + 1, y) {
+        if x < MAP_SIZE && self.can_reach_end(x + 1, y, path) {
+            path.push((x, y));
             return true;
         }
 
         // Check up:
-        if y > 0 && self.can_reach_end(x, y - 1) {
+        if y > 0 && self.can_reach_end(x, y - 1, path) {
+            path.push((x, y));
             return true;
         }
 
         // Check left:
-        if x > 0 && self.can_reach_end(x - 1, y) {
+        if x > 0 && self.can_reach_end(x - 1, y, path) {
+            path.push((x, y));
             return true;
         }
 
