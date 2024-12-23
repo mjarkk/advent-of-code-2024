@@ -15,7 +15,7 @@ fn main() {
 
         let mut secret: usize = line.parse().unwrap();
         for _ in 0..2000 {
-            gfcret(secret);
+            secret = next_secret(secret);
         }
         result += secret;
     }
