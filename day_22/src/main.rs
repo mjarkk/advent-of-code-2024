@@ -1,19 +1,14 @@
-use std::collections::HashMap;
 use std::fs;
 use std::time::Instant;
 
 const PRUNE: usize = 16777216;
+const LOOKUP_KEY_FLAGS_MASK: u32 = (1 << 4) - 1;
 
 fn main() {
     let now = Instant::now();
     let puzzle = fs::read_to_string("./puzzle.txt").unwrap();
 
-    let mut lookup_key_mask = 0u32;
-    for idx in 0u32..(6 * 4) {
-        lookup_key_mask = lookup_key_mask | 1 << idx;
-    }
-
-    let mut global_price_trakcer: HashMap<u32, u16> = HashMap::new();
+    let mut global_price_tracker = [0u16; 262143];
 
     let mut result = 0;
     for line in puzzle.lines() {
@@ -21,22 +16,26 @@ fn main() {
             continue;
         }
 
-        let mut monkey_price_trakcer: HashMap<u32, u16> = HashMap::new();
+        let mut monkey_price_tracker = [0u16; 262143];
 
         let mut secret: usize = line.parse().unwrap();
         let mut prev_price = (secret % 10) as i8;
+        let mut lookup_key_negative_flags = 0u32;
         let mut lookup_key = 0u32;
         for idx in 0..2000 {
             secret = next_secret(secret);
             let price = (secret % 10) as i8;
             let price_diff = price - prev_price;
-            // println!("{}: {} ({})", secret, price, price_diff);
 
-            lookup_key = (lookup_key << 6) | (price_diff + 10) as u32;
+            lookup_key = ((lookup_key * 10) + (price_diff.abs() as u32)) % 10000;
+            lookup_key_negative_flags =
+                (lookup_key_negative_flags << 1) | if price_diff < 0 { 1 } else { 0 };
             if idx > 2 {
-                let key = lookup_key & lookup_key_mask;
-                if !monkey_price_trakcer.contains_key(&key) {
-                    monkey_price_trakcer.insert(key, price as u16);
+                let key = ((lookup_key_negative_flags & LOOKUP_KEY_FLAGS_MASK) * 10000 + lookup_key)
+                    as usize;
+
+                if monkey_price_tracker[key] == 0 {
+                    monkey_price_tracker[key] = price as u16;
                 }
             }
 
@@ -44,32 +43,22 @@ fn main() {
         }
         result += secret;
 
-        for (key, value) in monkey_price_trakcer {
-            let entry = global_price_trakcer.entry(key).or_insert(0);
-            *entry += value;
+        for (idx, value) in monkey_price_tracker.iter().enumerate() {
+            global_price_tracker[idx] += value;
         }
     }
     println!("p1: {}", result);
 
     let mut result = 0u16;
-    for value in global_price_trakcer.values() {
-        if *value > result {
-            result = *value;
+    for value in global_price_tracker {
+        if value > result {
+            result = value;
         }
     }
     println!("p2: {}", result);
 
     println!("Elapsed: {:.2?}", now.elapsed());
 }
-
-// fn set_nr_to_set(nr: u32) -> [i8; 4] {
-//     let mut resp = [0, 0, 0, 0];
-//     let mask = 0x3F;
-//     for i in 0..4 {
-//         resp[3 - i] = (nr >> (i * 6) & mask) as i8 - 10;
-//     }
-//     resp
-// }
 
 fn next_secret(mut secret: usize) -> usize {
     // Calculate the result of multiplying the secret number by 64.
