@@ -81,29 +81,84 @@ fn main() {
             }
         }
     }
-    println!("{}", result);
+    println!("p1: {}", result);
 
     // Find solution for part 2
-    let search_size = 8;
-
+    let min_search_size = 10;
+    let mut biggest_batch = Vec::new();
+    let mut skips: Vec<bool> = Vec::with_capacity(16);
+    let mut hits_connected_node: Vec<(u16, Vec<bool>)> = Vec::with_capacity(16);
     for (base_id, connections) in network_map.iter() {
-        if connections.len() < search_size {
+        // Skip networks that are to small for part 2
+        if connections.len() < min_search_size || connections.len() <= biggest_batch.len() {
             continue;
         }
 
-        for connection_id in connections {
-            let connection = match network_map.get(&connection_id) {
+        // Firstly lets just notate information about the connections that are connected to the base node
+        // We mainly check if each child node is connected to all other child nodes and note that down.
+        // Beside that we check here already for some bogus nodes that we can probably skip.
+        hits_connected_node.clear();
+        skips.clear();
+        for connection_id in connections.iter() {
+            let node_connections = match network_map.get(&connection_id) {
                 Some(entry) => entry,
                 None => continue,
             };
 
-            if connection.len() < search_size {
+            if node_connections.len() < min_search_size {
                 continue;
+            }
+
+            let mut valid_conns = Vec::new();
+            let mut valid_conns_count = 0;
+            for compare_connection_id in connections.iter() {
+                let connected = compare_connection_id == connection_id
+                    || node_connections.contains(compare_connection_id);
+                valid_conns.push(connected);
+                if connected {
+                    valid_conns_count += 1;
+                }
+            }
+            if valid_conns_count > 3 {
+                hits_connected_node.push((*connection_id, valid_conns));
+                skips.push(false);
+            } else {
+                skips.push(true);
             }
         }
 
-        println!("potential: {}", base_id);
+        // At this point we collect all the nodes that are connected to every other node
+        // We skip the nodes that have missing connections except for the connections that are very loosly connected. (skips)
+        let mut ids = Vec::new();
+        'outer: for line in hits_connected_node.iter() {
+            for (idx, value) in line.1.iter().enumerate() {
+                if !skips[idx] && !*value {
+                    continue 'outer;
+                }
+            }
+
+            ids.push(line.0);
+        }
+
+        if ids.len() + 1 > biggest_batch.len() {
+            ids.push(*base_id);
+            biggest_batch = ids;
+        }
     }
+
+    let mut biggest_batch_computer_names = Vec::with_capacity(biggest_batch.len());
+    for id in biggest_batch {
+        biggest_batch_computer_names.push(computer_name_lookup.get(&id).unwrap());
+    }
+    biggest_batch_computer_names.sort();
+    print!("p2: ");
+    for (idx, name) in biggest_batch_computer_names.iter().enumerate() {
+        if idx != 0 {
+            print!(",");
+        }
+        print!("{}", name);
+    }
+    println!();
 
     println!("Elapsed: {:.2?}", now.elapsed());
 }
