@@ -77,9 +77,7 @@ fn main() {
 
     let mut cheats = 0;
     let cheat_options = state.find_places_to_cheat();
-    for (idx, cheat_position) in cheat_options.iter().enumerate() {
-        // println!("{} of {}", idx + 1, cheat_options.len());
-
+    for cheat_position in cheat_options.iter() {
         state.reset();
 
         // Remove the wall from the map where we can cheat
