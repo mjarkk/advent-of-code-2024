@@ -1,7 +1,6 @@
 use std::collections::{HashMap, HashSet};
-use std::io::{self, Read};
-use std::time::Instant;
-use std::{fs, result, vec};
+use std::io::{self};
+use std::{fs, vec};
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 enum Operator {
@@ -58,7 +57,6 @@ impl Gate {
 }
 
 fn main() {
-    let now = Instant::now();
     let puzzle = fs::read_to_string("./puzzle.txt").unwrap();
 
     let mut states: HashMap<String, bool> = HashMap::new();
@@ -91,28 +89,12 @@ fn main() {
     // Sort the gates so we can execute them in order
     sort_gates(&mut gates, &mut states.keys().cloned().collect());
 
-    // let mut bogus_outputs = Vec::new();
     for gate in gates.iter() {
-        // if let Operator::AND = gate.operator {
-        //     if (gate.lefthand.starts_with('x') || gate.lefthand.starts_with('y'))
-        //         && (gate.righthand.starts_with('x') || gate.righthand.starts_with('y'))
-        //         && gate.result.starts_with('z')
-        //     {
-        //         bogus_outputs.push(gate);
-        //     }
-        // }
-
-        // gate.print();
-        // if gate.result.starts_with('z') {
-        //     println!();
-        // }
-
         let left_hand = states.get(&gate.lefthand).unwrap();
         let right_hand = states.get(&gate.righthand).unwrap();
         let result = gate.operator.apply(*left_hand, *right_hand);
         states.insert(gate.result.to_string(), result);
     }
-    // println!("bogus outputs: {:?}", bogus_outputs);
 
     let mut state_keys: Vec<String> = states.keys().cloned().collect();
     state_keys.sort();
@@ -127,15 +109,11 @@ fn main() {
         }
 
         let value = if *states.get(key).unwrap() { 1 } else { 0 };
-        // println!("{}: {}", key, value);
         result = (result << 1) | value;
     }
     println!("{}", result);
 
     interactive_solve(gates);
-    // solve(gates);
-
-    println!("Elapsed: {:.2?}", now.elapsed());
 }
 
 fn sort_gates(gates: &mut Vec<Gate>, known_variables: &mut HashSet<String>) {
@@ -344,197 +322,4 @@ fn interactive_solve(mut gates: Vec<Gate>) {
 
         gates = new_instructions;
     }
-}
-
-fn solve(mut gates: Vec<Gate>) {
-    let mut new_instructions: Vec<Gate> = Vec::new();
-    for idx in (0..gates.len()).rev() {
-        let gate = &gates[idx];
-        if gate.result.starts_with('z') {
-            new_instructions.push(gate.clone());
-            gates.remove(idx);
-        }
-    }
-
-    new_instructions.sort_by(|a, b| a.result.cmp(&b.result));
-
-    let mut bogus_output_gates = Vec::new();
-    for idx in (0..new_instructions.len() - 1).rev() {
-        let gate = &new_instructions[idx];
-        if gate.operator != Operator::XOR {
-            bogus_output_gates.push(gate.clone());
-            new_instructions.remove(idx);
-        }
-    }
-
-    let mut no_matches = 0;
-    'outer: while let Some(gate) = gates.pop() {
-        for (idx, new_gate) in new_instructions.iter().enumerate() {
-            if new_gate.lefthand == gate.result || new_gate.righthand == gate.result {
-                new_instructions.insert(idx, gate);
-                no_matches = 0;
-                continue 'outer;
-            }
-        }
-
-        if no_matches > gates.len() {
-            break;
-        }
-        no_matches += 1;
-
-        gates.insert(0, gate);
-    }
-
-    'outer: loop {
-        let mut last_z_register = String::new();
-        let mut last_instruction_set = Vec::new();
-        for (gate_idx, gate) in new_instructions.iter().enumerate() {
-            last_instruction_set.push(gate.clone());
-
-            if last_instruction_set.len() == 5 {
-                let mut valid = true;
-                for (idx, gate) in last_instruction_set.iter().enumerate() {
-                    match (idx, gate.operator) {
-                        (0, Operator::AND) => {}
-                        (1, Operator::AND) => {}
-                        (2, Operator::OR) => {}
-                        (3, Operator::XOR) => {}
-                        (4, Operator::XOR) => {}
-                        _ => {
-                            valid = false;
-                            break;
-                        }
-                    }
-                }
-
-                if valid && !gate.result.starts_with('z') {
-                    let expected_z_register_nr = last_z_register[1..].parse::<u8>().unwrap() + 1;
-                    let expected_z_register = format!("z{:02}", expected_z_register_nr);
-
-                    // In this sequence we expected the last instruction to write to a z register
-                    for (sub_gate_idx, sub_gate) in bogus_output_gates.iter().enumerate() {
-                        if sub_gate.result == expected_z_register {
-                            let mut new_gate = gate.clone();
-                            new_gate.result = sub_gate.result.clone();
-                            let mut new_sub_gate = sub_gate.clone();
-                            new_sub_gate.result = gate.result.clone();
-
-                            bogus_output_gates.remove(sub_gate_idx);
-
-                            new_instructions[gate_idx] = new_gate;
-                            gates.push(new_sub_gate);
-
-                            continue 'outer;
-                        }
-                    }
-                }
-            }
-
-            if gate.result.starts_with('z') {
-                last_z_register = gate.result.clone();
-                last_instruction_set.clear();
-            }
-        }
-
-        no_matches = 0;
-        'inner: while let Some(gate) = gates.pop() {
-            for (idx, new_gate) in new_instructions.iter().enumerate() {
-                if new_gate.lefthand == gate.result || new_gate.righthand == gate.result {
-                    println!("INSERTING");
-                    gate.print();
-                    new_instructions.insert(idx, gate);
-                    no_matches = 0;
-                    continue 'inner;
-                }
-            }
-
-            if no_matches > gates.len() {
-                continue 'outer;
-            }
-            no_matches += 1;
-
-            gates.insert(0, gate);
-        }
-
-        break;
-    }
-
-    assert_eq!(gates.len(), 0);
-    assert_eq!(bogus_output_gates.len(), 0);
-
-    let mut last_instructions = Vec::new();
-    for gate_idx in 0..new_instructions.len() {
-        let gate = &new_instructions[gate_idx];
-        last_instructions.push(gate.clone());
-        if !gate.result.starts_with('z') {
-            continue;
-        }
-
-        let mut valid = true;
-        for (idx, gate) in last_instructions.iter().enumerate() {
-            match (idx, gate.operator) {
-                (0, Operator::AND) => {}
-                (1, Operator::AND) => {}
-                (2, Operator::OR) => {}
-                (3, Operator::XOR) => {}
-                (3, Operator::AND) => {
-                    // migth know how to fix this
-                    let last_instruction = last_instructions.last().unwrap();
-                    if gate.lefthand[1..] != last_instruction.result[1..]
-                        || gate.righthand[1..] != last_instruction.result[1..]
-                    {
-                        valid = false;
-                        break;
-                    }
-
-                    // Lets search for a gate that we can swap this with
-                    let mut swap_with_idx = None;
-                    for (sub_gate_idx, sub_gate) in new_instructions.iter().enumerate() {
-                        if sub_gate.operator == Operator::XOR
-                            && sub_gate.lefthand[1..] == last_instruction.result[1..]
-                            && sub_gate.righthand[1..] == last_instruction.result[1..]
-                        {
-                            swap_with_idx = Some(sub_gate_idx);
-                            break;
-                        }
-                    }
-
-                    let swap_with_idx = match swap_with_idx {
-                        Some(idx) => idx,
-                        None => {
-                            valid = false;
-                            break;
-                        }
-                    };
-
-                    let mut new_and = new_instructions[swap_with_idx].clone();
-                    let mut new_xor = new_instructions[gate_idx - 1].clone();
-                    (new_xor.result, new_and.result) =
-                        (new_and.result.clone(), new_xor.result.clone());
-
-                    new_instructions[swap_with_idx] = new_xor;
-                    new_instructions[gate_idx - 1] = new_and;
-                }
-                (4, Operator::XOR) => {}
-                _ => {
-                    valid = false;
-                    break;
-                }
-            }
-        }
-
-        if valid {
-            last_instructions.clear();
-            continue;
-        }
-
-        for offset in 0..last_instructions.len() {
-            let gate = &new_instructions[gate_idx - (last_instructions.len() - 1 - offset)];
-            gate.print();
-        }
-        println!();
-        last_instructions.clear();
-    }
-
-    println!("{} {}", new_instructions.len(), gates.len());
 }
