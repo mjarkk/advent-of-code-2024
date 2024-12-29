@@ -2,23 +2,28 @@ use std::fs;
 use std::time::Instant;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
-enum Tail {
-    Empty(Option<usize>),
+enum TailKind {
+    Empty,
     Wall,
 }
 
+#[derive(Debug, Clone)]
+struct Tail {
+    kind: TailKind,
+    cost: Option<usize>,
+}
+
 impl Tail {
-    fn is_empty(&self) -> bool {
-        match self {
-            Tail::Empty(_) => true,
-            _ => false,
-        }
+    fn new(kind: TailKind) -> Self {
+        Tail { kind, cost: None }
     }
 }
 
 struct State {
     map: Vec<Vec<Tail>>,
+    solusion_cost_map: Vec<Vec<Tail>>,
     end: (usize, usize),
+    start: (usize, usize),
     map_size: (usize, usize),
 }
 
@@ -46,61 +51,34 @@ fn main() {
 
     let mut state = State {
         map: Vec::new(),
+        solusion_cost_map: Vec::new(),
         end: (0, 0),
+        start: (0, 0),
         map_size: (0, 0),
     };
 
-    let mut start = (0, 0);
     for (y, puzzle_line) in puzzle.lines().enumerate() {
         let mut map_line: Vec<Tail> = Vec::new();
         for (x, c) in puzzle_line.chars().enumerate() {
             map_line.push(match c {
                 'S' => {
-                    start = (x, y);
-                    Tail::Empty(None)
+                    state.start = (x, y);
+                    Tail::new(TailKind::Empty)
                 }
                 'E' => {
                     state.end = (x, y);
-                    Tail::Empty(None)
+                    Tail::new(TailKind::Empty)
                 }
-                '#' => Tail::Wall,
-                _ => Tail::Empty(None),
+                '#' => Tail::new(TailKind::Wall),
+
+                _ => Tail::new(TailKind::Empty),
             });
         }
         state.map.push(map_line);
     }
     state.map_size = (state.map[0].len(), state.map.len());
 
-    // Solve the puzzle first once without cheats to get to know the fastest route
-    let route_cost = state.solve(start, 0).unwrap();
-    println!("{}", route_cost);
-
-    let mut cheats = 0;
-    let cheat_options = state.find_places_to_cheat();
-    for cheat_position in cheat_options.iter() {
-        state.reset();
-
-        // Remove the wall from the map where we can cheat
-        state.map[cheat_position.1][cheat_position.0] = Tail::Empty(None);
-
-        // Calculate a new route score
-        let route_cost_with_cheat = state.solve(start, 0).unwrap();
-
-        // Restore the cheat back to a wall
-        state.map[cheat_position.1][cheat_position.0] = Tail::Wall;
-
-        if route_cost_with_cheat >= route_cost {
-            continue;
-        }
-
-        let diff = route_cost - route_cost_with_cheat;
-        if diff < 100 {
-            continue;
-        }
-
-        cheats += 1;
-    }
-    println!("{}", cheats);
+    state.find_cheats();
 
     // for line in state.map.iter() {
     //     for tail in line.iter() {
@@ -117,50 +95,23 @@ fn main() {
 }
 
 impl State {
-    fn find_places_to_cheat(&self) -> Vec<(usize, usize)> {
-        let mut resp = Vec::new();
+    fn solve(&mut self, cord: (usize, usize), cost: usize) -> Option<usize> {
+        let tail = &self.map[cord.1][cord.0];
+        if TailKind::Wall == tail.kind {
+            return None;
+        }
 
-        for y in 1..self.map_size.1 - 1 {
-            for x in 1..self.map_size.0 - 1 {
-                if let Tail::Empty(_) = self.map[y][x] {
-                    continue;
-                }
-
-                let left_right = [&self.map[y][x - 1], &self.map[y][x + 1]]
-                    .iter()
-                    .all(|v| v.is_empty());
-                if left_right {
-                    resp.push((x, y));
-                    continue;
-                }
-
-                let top_bottom = [&self.map[y - 1][x], &self.map[y + 1][x]]
-                    .iter()
-                    .all(|v| v.is_empty());
-                if top_bottom {
-                    resp.push((x, y));
-                    continue;
-                }
+        if let Some(v) = tail.cost {
+            if cost >= v {
+                return None;
             }
         }
 
-        resp
-    }
+        self.map[cord.1][cord.0].cost = Some(cost);
 
-    fn solve(&mut self, cord: (usize, usize), cost: usize) -> Option<usize> {
         if cord == self.end {
             return Some(cost);
         }
-
-        match &self.map[cord.1][cord.0] {
-            Tail::Empty(Some(v)) if cost >= *v => {
-                return None;
-            }
-            Tail::Empty(_) => { /* continue */ }
-            Tail::Wall => return None,
-        }
-
-        self.map[cord.1][cord.0] = Tail::Empty(Some(cost));
 
         let mut best_score = None;
         for direction in [
@@ -184,10 +135,175 @@ impl State {
     fn reset(&mut self) {
         for line in self.map.iter_mut() {
             for tail in line.iter_mut() {
-                if let Tail::Empty(v) = tail {
-                    *v = None;
+                tail.cost = None;
+            }
+        }
+    }
+
+    fn solve_reverse(&mut self, cord: (usize, usize), cost: usize) -> Option<usize> {
+        let tail = &self.map[cord.1][cord.0];
+        if TailKind::Wall == tail.kind {
+            return None;
+        }
+
+        if let Some(v) = tail.cost {
+            if cost >= v {
+                return None;
+            }
+        }
+
+        self.map[cord.1][cord.0].cost = Some(cost);
+
+        if cord == self.start {
+            return Some(cost);
+        }
+
+        let mut best_score = None;
+        for direction in [
+            Direction::Up,
+            Direction::Down,
+            Direction::Left,
+            Direction::Right,
+        ] {
+            let new_cord = direction.resolve(cord);
+            match (self.solve_reverse(new_cord, cost + 1), best_score) {
+                (None, _) => continue,
+                (Some(v), None) => best_score = Some(v),
+                (Some(a), Some(b)) if a < b => best_score = Some(a),
+                _ => continue,
+            }
+        }
+
+        best_score
+    }
+
+    fn find_cheats(&mut self) {
+        self.solve_reverse(self.end, 0);
+        self.solusion_cost_map = self.map.clone();
+
+        self.reset();
+        let min_score = if self.map_size.0 == 15 { 50 } else { 100 };
+        let minimal_cost = self.solve(self.start, 0).unwrap() - min_score;
+
+        let mut total_cheats = 0;
+        let mut total_cheats_p1 = 0;
+        let mut total_cheats_p2 = 0;
+        for y in 1..self.map_size.1 - 1 {
+            for x in 1..self.map_size.0 - 1 {
+                for cheat_x_offset in -20i16..=20i16 {
+                    for cheat_y_offset in -20i16..=20i16 {
+                        let diff = cheat_x_offset.abs() + cheat_y_offset.abs();
+                        if diff > 20 {
+                            continue;
+                        }
+                        if diff < 2 {
+                            continue;
+                        }
+                        if diff == 2 && cheat_x_offset.abs() == 1 {
+                            continue;
+                        }
+
+                        let cheat_x = x as i16 + cheat_x_offset;
+                        let cheat_y = y as i16 + cheat_y_offset;
+                        if cheat_x <= 0 || cheat_x >= self.map_size.0 as i16 - 1 {
+                            continue;
+                        }
+                        if cheat_y <= 0 || cheat_y >= self.map_size.1 as i16 - 1 {
+                            continue;
+                        }
+
+                        let map_start = &self.map[y][x];
+                        let map_end = &self.map[cheat_y as usize][cheat_x as usize];
+
+                        let solusion_start = &self.solusion_cost_map[y][x];
+                        let solusion_end =
+                            &self.solusion_cost_map[cheat_y as usize][cheat_x as usize];
+
+                        if map_start.cost.is_none() {
+                            continue;
+                        }
+                        if solusion_start.cost.is_none() || solusion_end.cost.is_none() {
+                            continue;
+                        }
+
+                        assert_eq!(map_start.kind, solusion_start.kind);
+                        assert_eq!(map_end.kind, solusion_end.kind);
+
+                        if TailKind::Wall == map_start.kind || TailKind::Wall == map_end.kind {
+                            continue;
+                        }
+
+                        // Potential cheat found, the start and ends are are both on emtpy places
+
+                        let cost = map_start.cost.unwrap();
+                        let cost_til_solusion_start = solusion_start.cost.unwrap();
+                        let cost_til_solusion_end = solusion_end.cost.unwrap();
+
+                        if cost_til_solusion_end > cost_til_solusion_start {
+                            continue;
+                        }
+
+                        if cost + (diff as usize) + cost_til_solusion_end - 1 <= minimal_cost {
+                            total_cheats_p2 += 1;
+                            if diff == 2 {
+                                total_cheats_p1 += 1;
+                            }
+                        }
+                    }
+                }
+
+                if TailKind::Empty == self.map[y][x].kind {
+                    continue;
+                }
+
+                // This is a wall, check all cheat options
+                let cheats = [
+                    ((x - 1, y), (x + 1, y)),
+                    ((x + 1, y), (x - 1, y)),
+                    ((x, y - 1), (x, y + 1)),
+                    ((x, y + 1), (x, y - 1)),
+                ];
+
+                for (start, end) in cheats {
+                    let map_start = &self.map[start.1][start.0];
+                    let map_end = &self.map[end.1][end.0];
+
+                    let solusion_start = &self.solusion_cost_map[start.1][start.0];
+                    let solusion_end = &self.solusion_cost_map[end.1][end.0];
+
+                    if map_start.cost.is_none() {
+                        continue;
+                    }
+                    if solusion_start.cost.is_none() || solusion_end.cost.is_none() {
+                        continue;
+                    }
+
+                    assert_eq!(map_start.kind, solusion_start.kind);
+                    assert_eq!(map_end.kind, solusion_end.kind);
+
+                    if TailKind::Wall == map_start.kind || TailKind::Wall == map_end.kind {
+                        continue;
+                    }
+
+                    // Potential cheat found, the start and ends are are both on emtpy places
+
+                    let cost = map_start.cost.unwrap();
+                    let cost_til_solusion_start = solusion_start.cost.unwrap();
+                    let cost_til_solusion_end = solusion_end.cost.unwrap();
+
+                    if cost_til_solusion_end > cost_til_solusion_start {
+                        continue;
+                    }
+
+                    if cost + 2 + cost_til_solusion_end <= minimal_cost {
+                        total_cheats += 1;
+                    }
                 }
             }
         }
+
+        println!("{}", total_cheats);
+        println!("{}", total_cheats_p1);
+        println!("{}", total_cheats_p2);
     }
 }
