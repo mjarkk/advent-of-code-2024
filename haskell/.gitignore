@@ -1,0 +1,6 @@
+puzzle.txt
+LICENSE
+CHANGES
+*.md
+dist-*
+debug
